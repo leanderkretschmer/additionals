@@ -446,7 +446,7 @@ class Dashboard < ActiveRecord::Base
       project_id_was.present?
   end
 
-  private
+  #private
 
   def strip_whitespace
     name&.strip!
