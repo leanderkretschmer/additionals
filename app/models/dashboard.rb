@@ -177,7 +177,7 @@ class Dashboard < ActiveRecord::Base
       true
     when VISIBILITY_ROLES
       if project
-        user.roles_for_project(project).intersect?(roles)
+        roles.intersect?(user.roles_for_project(project))
       else
         user.memberships.joins(:member_roles).where(member_roles: { role_id: roles.map(&:id) }).any?
       end
@@ -300,7 +300,7 @@ class Dashboard < ActiveRecord::Base
   def async_params(block, options, settings)
     if block.blank?
       msg = 'block is missing for dashboard_async'
-      Rails.log.error msg
+      Rails.logger.error msg
       raise msg
     end
 
@@ -314,7 +314,7 @@ class Dashboard < ActiveRecord::Base
 
     if settings.present?
       settings.each do |key, setting|
-        settings[key] = setting.compact_blank.join ',' if setting.is_a? Array
+        settings[key] = Array(setting).compact_blank.join ',' if setting.is_a? Array
 
         next if options[:exposed_params].blank?
 
