@@ -283,11 +283,110 @@ class Dashboard < ActiveRecord::Base
     name
   end
 
+  def locked?
+    false # Default implementation - adjust based on your needs
+  end
+
   # Returns a string of css classes that apply to the entry
   def css_classes(user = User.current)
     s = ['dashboard']
     s << 'created-by-me' if author_id == user.id
     s.join ' '
+  end
+
+  private
+
+  def strip_whitespace
+    name&.strip!
+  end
+
+  def clear_unused_block_settings
+    blocks = layout.values.flatten
+    layout_settings.keep_if { |block, _settings| blocks.include? block }
+  end
+
+  def remove_unused_role_relations
+    return if !saved_change_to_visibility? || visibility == VISIBILITY_ROLES
+
+    roles.clear
+  end
+
+  def validate_roles
+    return if visibility != VISIBILITY_ROLES || roles.present?
+
+    errors.add(:base,
+               [l(:label_role_plural), l('activerecord.errors.messages.blank')].join(' '))
+  end
+
+  def validate_system_default
+    return if new_record? ||
+              system_default_was == system_default ||
+              system_default? ||
+              project_id.present?
+
+    raise SystemDefaultChangeException
+  end
+
+  def validate_project_system_default
+    return if project_id_can_change?
+
+    raise ProjectSystemDefaultChangeException if project_id.present?
+  end
+
+  def check_locked
+    raise 'It is not allowed to delete dashboard, because it is locked' if locked?
+  end
+
+  def check_destroy_system_default
+    raise 'It is not allowed to delete dashboard, which is system default' unless deletable?
+  end
+
+  def dashboard_type_check
+    self.project_id = nil if dashboard_type == DashboardContentWelcome::TYPE_NAME
+  end
+
+  def update_system_defaults
+    return unless system_default? && User.current.allowed_to?(:set_system_dashboards, project, global: true)
+
+    scope = self.class
+                .where(dashboard_type:)
+                .where.not(id:)
+
+    scope = scope.where project: project if dashboard_type == DashboardContentProject::TYPE_NAME
+
+    scope.update_all system_default: false
+  end
+
+  # check if permissions changed and dashboard settings have to be corrected
+  def visibility_check
+    user = User.current
+
+    return if system_default? ||
+              user.allowed_to?(:share_dashboards, project, global: true) ||
+              user.allowed_to?(:set_system_dashboards, project, global: true)
+
+    # change to private
+    self.visibility = VISIBILITY_PRIVATE
+  end
+
+  def validate_visibility
+    errors.add :visibility, :must_be_for_everyone if system_default? && visibility != VISIBILITY_PUBLIC
+  end
+
+  def validate_name
+    return if name.blank?
+
+    scope = self.class.visible.where(name:)
+    if dashboard_type == DashboardContentProject::TYPE_NAME
+      scope = scope.project_only
+      scope = scope.where(project_id:)
+      scope = scope.or scope.where(project_id: nil) if project_id.present?
+    else
+      scope = scope.welcome_only
+    end
+
+    scope = scope.where.not id: id unless new_record?
+    errors.add :name, :name_not_unique if scope.count.positive?
   end
 
   def allowed_target_projects(user = User.current)
@@ -440,9 +539,5 @@ class Dashboard < ActiveRecord::Base
 
     scope = scope.where.not id: id unless new_record?
     errors.add :name, :name_not_unique if scope.count.positive?
-  end
-
-  def locked?
-    false # Default implementation - adjust based on your needs
   end
 end
