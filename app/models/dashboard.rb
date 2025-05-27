@@ -283,9 +283,9 @@ class Dashboard < ActiveRecord::Base
     name
   end
 
-  def locked?
-    false # Default implementation - adjust based on your needs
-  end
+  #def locked?
+  #  false # Default implementation - adjust based on your needs
+  #end
 
   # Returns a string of css classes that apply to the entry
   def css_classes(user = User.current)
