@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Dashboard < ApplicationRecord
+class Dashboard < ActiveRecord::Base
   include Redmine::I18n
   include Redmine::SafeAttributes
   include Additionals::EntityMethods
@@ -440,5 +440,9 @@ class Dashboard < ApplicationRecord
 
     scope = scope.where.not id: id unless new_record?
     errors.add :name, :name_not_unique if scope.count.positive?
+  end
+
+  def locked?
+    false # Default implementation - adjust based on your needs
   end
 end
